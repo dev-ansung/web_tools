@@ -21,6 +21,7 @@
   </div>
 
   <!-- Paste zone -->
+  <input type="file" id="file-input" accept="image/*" style="display:none;" />
   <div id="paste-zone" tabindex="0">
     <svg class="paste-icon" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"
          viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
@@ -28,7 +29,7 @@
       <circle cx="8.5" cy="8.5" r="1.5"/>
       <polyline points="21 15 16 10 5 21"/>
     </svg>
-    <div class="paste-label">Ctrl+V to paste an image</div>
+    <div class="paste-label">Click or Ctrl+V to add an image</div>
     <div class="paste-sub">or drag &amp; drop a file here</div>
   </div>
 
@@ -63,7 +64,7 @@
 
       <div class="field">
         <label>TARGET SIZE (KB)</label>
-        <input type="number" class="size-input" id="target-input" placeholder="e.g. 1000 for Discord" min="1" />
+        <input type="number" class="size-input" id="target-input" placeholder="e.g. 1000 for Discord" min="1" value="1024" />
       </div>
 
       <div class="field" style="justify-content: flex-end;">
@@ -115,6 +116,7 @@
     var debounceTimer = null;
 
     var pasteZone   = document.getElementById('paste-zone');
+    var fileInput   = document.getElementById('file-input');
     var settings    = document.getElementById('settings');
     var preview     = document.getElementById('preview');
     var downloadBar = document.getElementById('download-bar');
@@ -159,6 +161,8 @@
       scheduleCompress();
     });
 
+    autoBtn.disabled = !targetInput.value || +targetInput.value < 1;
+
     targetInput.addEventListener('input', function () {
       autoBtn.disabled = !this.value || +this.value < 1;
     });
@@ -167,7 +171,7 @@
       var target = +targetInput.value;
       if (!target || !origBitmap) return;
       var q = autoFitQuality(target * 1024);
-      qualSlider.value = Math.round(q * 100);
+      qualSlider.value = Math.floor(q * 100);
       qualVal.textContent = qualSlider.value;
       compress();
     });
@@ -280,6 +284,9 @@
         if (hi - lo < 0.004) break;
       }
 
+      // lo is the highest quality guaranteed to be <= targetBytes
+      mid = lo;
+
       if (currentFmt === 'image/png') {
         currentFmt = 'image/jpeg';
         document.querySelectorAll('.fmt-btn').forEach(function (b) {
@@ -355,7 +362,14 @@
 
     pasteZone.addEventListener('click', function (e) {
       if (e.target.closest('.replace-btn')) return;
-      pasteZone.focus();
+      if (origBitmap) { pasteZone.focus(); return; }
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function () {
+      var file = this.files[0];
+      if (file && file.type.startsWith('image/')) loadBlob(file, file.name);
+      this.value = '';
     });
 
     // ── Helpers ────────────────────────────────────────────────────────────────
