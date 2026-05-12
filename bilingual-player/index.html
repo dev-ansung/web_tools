@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bilingual Player</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .top-bar {
+      width: 100%;
+      max-width: 880px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .back-link {
+      color: #666;
+      text-decoration: none;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: #ccc; }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #fff;
+    }
+
+    /* ── Open button ── */
+    .open-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #1a1a1a;
+      border: 2px dashed #333;
+      border-radius: 8px;
+      padding: 12px 22px;
+      color: #aaa;
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+      max-width: 880px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .open-btn:hover { border-color: #7c6af7; color: #ddd; }
+    .open-btn.has-file { border-style: solid; border-color: #2a2a2a; color: #e0e0e0; }
+    .open-btn input { display: none; }
+
+    /* ── Player shell ── */
+    #player-shell {
+      width: 100%;
+      max-width: 880px;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* video area */
+    #video-area {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+    }
+
+    #video-area video {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* subtitle overlays */
+    .sub {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 88%;
+      text-align: center;
+      display: none;
+      cursor: grab;
+      touch-action: none;
+    }
+    .sub.dragging { cursor: grabbing; }
+    .sub span {
+      display: inline;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.6);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      font-size: clamp(0.9rem, 2.2vw, 1.15rem);
+    }
+
+    #sub1 { bottom: 54px; }
+    #sub1 span { color: #fff; }
+
+    #sub2 { bottom: calc(54px + clamp(1.6rem, 4vw, 2rem) + 8px); }
+    #sub2 span { color: #facc15; }
+
+    /* ── Control bar ── */
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 10px;
+      background: #111;
+      border-top: 1px solid #1e1e1e;
+    }
+
+    /* seek + time */
+    #seek {
+      flex: 1;
+      height: 4px;
+      accent-color: #7c6af7;
+      cursor: pointer;
+    }
+
+    #time {
+      font-size: 0.78rem;
+      color: #888;
+      white-space: nowrap;
+      min-width: 90px;
+      text-align: right;
+      padding-right: 4px;
+    }
+
+    /* icon buttons */
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      cursor: pointer;
+      padding: 5px 6px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .ctrl-btn:hover { color: #fff; background: #222; }
+
+    /* CC buttons */
+    .cc-btn {
+      background: none;
+      border: 1px solid #333;
+      border-radius: 5px;
+      color: #555;
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 3px 7px;
+      line-height: 1.4;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .cc-btn:hover { border-color: #555; color: #aaa; }
+
+    .cc-btn.active-1 { color: #fff; border-color: #666; }
+    .cc-btn.active-2 { color: #facc15; border-color: #a68b00; }
+    .cc-btn.off      { color: #444; border-color: #2a2a2a; text-decoration: line-through; }
+
+    .cc-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cc-dot-1 { background: #fff; }
+    .cc-dot-2 { background: #facc15; }
+
+    input[type=file] { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <a class="back-link" href="../index.html">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+           viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Tools
+    </a>
+    <h1>Bilingual Player</h1>
+  </div>
+
+  <!-- Video open -->
+  <label class="open-btn" id="video-btn">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+         viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="23 7 16 12 23 17 23 7"/>
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+    </svg>
+    <span id="video-name">Choose a video file…</span>
+    <input type="file" id="video-input" accept="video/*" />
+  </label>
+
+  <!-- Player -->
+  <div id="player-shell">
+
+    <div id="video-area">
+      <video id="video" preload="metadata"></video>
+      <div class="sub" id="sub2"><span id="sub2-text"></span></div>
+      <div class="sub" id="sub1"><span id="sub1-text"></span></div>
+    </div>
+
+    <div id="controls">
+
+      <!-- Play/pause -->
+      <button class="ctrl-btn" id="play-btn" title="Play / Pause">
+        <svg id="play-icon" width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+      </button>
+
+      <!-- Seek -->
+      <input type="range" id="seek" min="0" step="0.05" value="0" />
+
+      <!-- Time -->
+      <span id="time">0:00 / 0:00</span>
+
+      <!-- Volume -->
+      <button class="ctrl-btn" id="mute-btn" title="Mute / Unmute">
+        <svg id="vol-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+             viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+      </button>
+
+      <!-- CC 1 -->
+      <button class="cc-btn" id="cc1-btn" title="Subtitle 1 (click to load)">
+        <span class="cc-dot cc-dot-1"></span>CC1
+      </button>
+      <input type="file" id="sub1-input" accept=".srt,.vtt" />
+
+      <!-- CC 2 -->
+      <button class="cc-btn" id="cc2-btn" title="Subtitle 2 (click to load)">
+        <span class="cc-dot cc-dot-2"></span>CC2
+      </button>
+      <input type="file" id="sub2-input" accept=".srt,.vtt" />
+
+      <!-- Fullscreen -->
+      <button class="ctrl-btn" id="fs-btn" title="Fullscreen">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+             viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9"/>
+          <polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/>
+          <line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+      </button>
+
+    </div>
+  </div>
+
+  <script>
+  (function () {
+
+    // ── Subtitle parser ──────────────────────────────────────────────────────
+
+    function toSec(ts) {
+      var p = ts.trim().replace(',', '.').split(':');
+      return +p[0] * 3600 + +p[1] * 60 + +p[2];
+    }
+
+    function parseSubs(raw) {
+      var cues = [];
+      var blocks = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split(/\n\n+/);
+      for (var i = 0; i < blocks.length; i++) {
+        var lines = blocks[i].trim().split('\n');
+        var li = 0;
+        if (/^WEBVTT/i.test(lines[li])) li++;
+        if (/^\d+$/.test((lines[li] || '').trim())) li++;
+        var m = (lines[li] || '').match(/(\d[\d:.,']+)\s*-->\s*(\d[\d:.,']+)/);
+        if (!m) continue;
+        var body = lines.slice(li + 1).join('\n').replace(/<[^>]+>/g, '').trim();
+        if (body) cues.push({ s: toSec(m[1]), e: toSec(m[2]), t: body });
+      }
+      return cues;
+    }
+
+    function getCue(cues, t) {
+      for (var i = 0; i < cues.length; i++) {
+        if (t >= cues[i].s && t <= cues[i].e) return cues[i].t;
+      }
+      return '';
+    }
+
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+
+    var video     = document.getElementById('video');
+    var videoBtn  = document.getElementById('video-btn');
+    var videoName = document.getElementById('video-name');
+    var seek      = document.getElementById('seek');
+    var timeEl    = document.getElementById('time');
+    var playBtn   = document.getElementById('play-btn');
+    var playIcon  = document.getElementById('play-icon');
+    var muteBtn   = document.getElementById('mute-btn');
+    var volIcon   = document.getElementById('vol-icon');
+    var fsBtn     = document.getElementById('fs-btn');
+    var shell     = document.getElementById('player-shell');
+    var area      = document.getElementById('video-area');
+
+    // ── Subtitle tracks ───────────────────────────────────────────────────────
+
+    var tracks = [
+      {
+        cues: null, vis: false, activeClass: 'active-1',
+        btn:   document.getElementById('cc1-btn'),
+        input: document.getElementById('sub1-input'),
+        el:    document.getElementById('sub1'),
+        text:  document.getElementById('sub1-text'),
+      },
+      {
+        cues: null, vis: false, activeClass: 'active-2',
+        btn:   document.getElementById('cc2-btn'),
+        input: document.getElementById('sub2-input'),
+        el:    document.getElementById('sub2'),
+        text:  document.getElementById('sub2-text'),
+      },
+    ];
+
+    // ── Video file ────────────────────────────────────────────────────────────
+
+    var videoURL = null;
+    document.getElementById('video-input').addEventListener('change', function () {
+      var f = this.files[0]; if (!f) return;
+      if (videoURL) URL.revokeObjectURL(videoURL);
+      videoURL = URL.createObjectURL(f);
+      video.src = videoURL;
+      videoName.textContent = f.name;
+      videoBtn.classList.add('has-file');
+      video.play().catch(function () {});
+    });
+
+    // ── Playback controls ─────────────────────────────────────────────────────
+
+    function fmt(s) {
+      s = Math.floor(s || 0);
+      var m = Math.floor(s / 60), sec = s % 60;
+      return m + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    function togglePlay() {
+      if (video.paused) video.play().catch(function () {}); else video.pause();
+    }
+
+    function setPlayIcon(playing) {
+      playIcon.innerHTML = playing
+        ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+        : '<polygon points="5 3 19 12 5 21 5 3"/>';
+    }
+
+    video.addEventListener('loadedmetadata', function () { seek.max = video.duration; });
+    video.addEventListener('play',  function () { setPlayIcon(true);  });
+    video.addEventListener('pause', function () { setPlayIcon(false); });
+    video.addEventListener('timeupdate', function () {
+      if (!isNaN(video.duration)) seek.value = video.currentTime;
+      timeEl.textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+      renderSubs(video.currentTime);
+    });
+
+    playBtn.addEventListener('click', togglePlay);
+
+    var videoClickBlocked = false;
+    video.addEventListener('click', function () {
+      if (videoClickBlocked) { videoClickBlocked = false; return; }
+      togglePlay();
+    });
+
+    seek.addEventListener('input', function () { video.currentTime = +this.value; });
+
+    muteBtn.addEventListener('click', function () {
+      video.muted = !video.muted;
+      volIcon.style.opacity = video.muted ? '0.35' : '1';
+    });
+
+    fsBtn.addEventListener('click', function () {
+      if (!document.fullscreenElement) shell.requestFullscreen();
+      else document.exitFullscreen();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.code === 'Space')      { e.preventDefault(); togglePlay(); }
+      if (e.code === 'ArrowRight') video.currentTime += 5;
+      if (e.code === 'ArrowLeft')  video.currentTime -= 5;
+    });
+
+    // ── Subtitle tracks ───────────────────────────────────────────────────────
+
+    function updateCC(track) {
+      track.btn.className = 'cc-btn' + (track.cues === null ? '' : track.vis ? ' ' + track.activeClass : ' off');
+    }
+
+    function loadSubFile(input, onLoad) {
+      input.click();
+      var handler = function () {
+        var f = input.files[0]; if (!f) return;
+        var r = new FileReader();
+        r.onload = function (e) { onLoad(parseSubs(e.target.result), f.name); };
+        r.readAsText(f, 'UTF-8');
+        input.removeEventListener('change', handler);
+      };
+      input.addEventListener('change', handler);
+    }
+
+    function renderSubs(t) {
+      for (var i = 0; i < tracks.length; i++) {
+        var track = tracks[i];
+        if (!track.cues || !track.vis) continue;
+        var c = getCue(track.cues, t);
+        track.text.textContent = c;
+        track.el.style.display = c ? 'block' : 'none';
+      }
+    }
+
+    tracks.forEach(function (track) {
+      updateCC(track);
+      track.btn.addEventListener('click', function () {
+        if (track.cues === null) {
+          loadSubFile(track.input, function (cues, name) {
+            track.cues = cues;
+            track.vis  = true;
+            track.btn.title = name;
+            updateCC(track);
+          });
+        } else {
+          track.vis = !track.vis;
+          if (!track.vis) track.el.style.display = 'none';
+          updateCC(track);
+        }
+      });
+      makeDraggable(track.el);
+    });
+
+    // ── Subtitle drag (vertical only) ─────────────────────────────────────────
+
+    function makeDraggable(el) {
+      var dragging = false, moved = false, startY, origTop;
+
+      function startDrag(cy) {
+        var areaRect = area.getBoundingClientRect();
+        var elRect   = el.getBoundingClientRect();
+        el.style.bottom = 'auto';
+        el.style.top    = (elRect.top - areaRect.top) + 'px';
+        origTop  = elRect.top - areaRect.top;
+        startY   = cy;
+        dragging = true;
+        moved    = false;
+        el.classList.add('dragging');
+      }
+
+      function moveDrag(cy) {
+        if (!dragging) return;
+        var dy = cy - startY;
+        if (!moved && Math.abs(dy) < 3) return;
+        moved = true;
+        videoClickBlocked = true;
+        var areaRect = area.getBoundingClientRect();
+        var elRect   = el.getBoundingClientRect();
+        el.style.top = Math.max(0, Math.min(areaRect.height - elRect.height, origTop + dy)) + 'px';
+      }
+
+      function endDrag() {
+        if (!dragging) return;
+        dragging = false;
+        el.classList.remove('dragging');
+        if (!moved) videoClickBlocked = false;
+      }
+
+      el.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();
+        startDrag(e.clientY);
+      });
+      document.addEventListener('mousemove', function (e) { moveDrag(e.clientY); });
+      document.addEventListener('mouseup', endDrag);
+
+      el.addEventListener('touchstart', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        startDrag(e.touches[0].clientY);
+      }, { passive: false });
+      document.addEventListener('touchmove', function (e) {
+        if (!dragging) return;
+        e.preventDefault();
+        moveDrag(e.touches[0].clientY);
+      }, { passive: false });
+      document.addEventListener('touchend', endDrag);
+    }
+
+  }());
+  </script>
+
+</body>
+</html>

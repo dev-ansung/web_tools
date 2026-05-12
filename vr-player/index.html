@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VR Player</title>
+
+  <link href="dist/video-js.css" rel="stylesheet" />
+  <link href="dist/videojs-vr.css" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .top-bar {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .back-link {
+      color: #666;
+      text-decoration: none;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: #ccc; }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #fff;
+    }
+
+    .open-zone {
+      width: 100%;
+      max-width: 960px;
+      background: #1a1a1a;
+      border: 2px dashed #333;
+      border-radius: 10px;
+      padding: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      color: #888;
+      font-size: 0.9rem;
+    }
+    .open-zone:hover, .open-zone.drag-over {
+      border-color: #7c6af7;
+      background: #1e1a2e;
+      color: #ccc;
+    }
+    .open-zone.has-file {
+      border-style: solid;
+      border-color: #2a2a2a;
+      justify-content: flex-start;
+      color: #e0e0e0;
+    }
+    .open-zone input { display: none; }
+
+    #player-wrap {
+      width: 100%;
+      max-width: 960px;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <a class="back-link" href="../index.html">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+           viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Tools
+    </a>
+    <h1>VR Player</h1>
+  </div>
+
+  <div class="open-zone" id="open-zone">
+    <svg id="open-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+         viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="23 7 16 12 23 17 23 7"/>
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+    </svg>
+    <span id="open-label">Click or drop a 360° video file…</span>
+    <input type="file" id="video-input" accept="video/*" />
+  </div>
+
+  <div id="player-wrap">
+    <video id="vr-video" class="video-js vjs-big-play-centered vjs-default-skin"
+           width="960" height="540" controls playsinline preload="auto">
+    </video>
+  </div>
+
+  <script src="dist/video.js"></script>
+  <script src="dist/videojs-vr.js"></script>
+  <script>
+  (function (window, videojs) {
+
+    var MIN_FOV = 30, MAX_FOV = 115, DEFAULT_FOV = 75, FOV_STEP = 2;
+
+    var player = window.player = videojs('vr-video', { fluid: true });
+    player.mediainfo = { projection: '360' };
+    var vr = window.vr = player.vr({ projection: '360', debug: false, forceCardboard: false });
+
+    // ── Zoom ─────────────────────────────────────────────────────────────────
+
+    function applyFov(fov) {
+      if (!vr || !vr.camera) return;
+      vr.camera.fov = Math.min(MAX_FOV, Math.max(MIN_FOV, fov));
+      vr.camera.updateProjectionMatrix();
+    }
+
+    player.el().addEventListener('wheel', function (e) {
+      if (!vr || !vr.camera) return;
+      e.preventDefault();
+      applyFov(vr.camera.fov + (e.deltaY > 0 ? FOV_STEP : -FOV_STEP));
+    }, { passive: false });
+
+    var pinchDist0 = null, pinchFov0 = null;
+
+    player.el().addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) {
+        var dx = e.touches[0].clientX - e.touches[1].clientX;
+        var dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchDist0 = Math.sqrt(dx * dx + dy * dy);
+        pinchFov0  = vr && vr.camera ? vr.camera.fov : DEFAULT_FOV;
+      }
+    }, { passive: true });
+
+    player.el().addEventListener('touchmove', function (e) {
+      if (e.touches.length !== 2 || pinchDist0 === null || !vr || !vr.camera) return;
+      e.preventDefault();
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      applyFov(pinchFov0 * (pinchDist0 / Math.sqrt(dx * dx + dy * dy)));
+    }, { passive: false });
+
+    player.el().addEventListener('touchend', function () { pinchDist0 = null; pinchFov0 = null; });
+
+    // ── File loading ──────────────────────────────────────────────────────────
+
+    var openZone   = document.getElementById('open-zone');
+    var openLabel  = document.getElementById('open-label');
+    var openIcon   = document.getElementById('open-icon');
+    var videoInput = document.getElementById('video-input');
+    var currentURL = null;
+
+    openZone.addEventListener('click', function () { videoInput.click(); });
+    videoInput.addEventListener('change', function () { if (this.files[0]) loadFile(this.files[0]); });
+
+    openZone.addEventListener('dragover', function (e) { e.preventDefault(); openZone.classList.add('drag-over'); });
+    openZone.addEventListener('dragleave', function () { openZone.classList.remove('drag-over'); });
+    openZone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      openZone.classList.remove('drag-over');
+      var f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith('video/')) loadFile(f);
+    });
+
+    function loadFile(f) {
+      if (currentURL) URL.revokeObjectURL(currentURL);
+      currentURL = URL.createObjectURL(f);
+      player.src({ src: currentURL, type: f.type || 'video/mp4' });
+      player.one('playing', function () { applyFov(DEFAULT_FOV); });
+      player.play().catch(function () {});
+      openLabel.textContent = f.name;
+      openIcon.style.display = 'none';
+      openZone.classList.add('has-file');
+    }
+
+  }(window, window.videojs));
+  </script>
+
+</body>
+</html>
