@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Compressor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .top-bar {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .back-link {
+      color: #666;
+      text-decoration: none;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: #ccc; }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #fff;
+    }
+
+    /* ── Paste zone ── */
+    #paste-zone {
+      width: 100%;
+      max-width: 960px;
+      min-height: 140px;
+      background: #1a1a1a;
+      border: 2px dashed #333;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      outline: none;
+    }
+    #paste-zone:focus,
+    #paste-zone.drag-over { border-color: #7c6af7; background: #1e1b33; }
+    #paste-zone.has-image { min-height: unset; padding: 14px 20px; flex-direction: row; justify-content: flex-start; border-style: solid; border-color: #2a2a2a; cursor: default; }
+
+    .paste-icon { color: #444; }
+    .paste-label { color: #666; font-size: 0.9rem; }
+    .paste-sub   { color: #444; font-size: 0.78rem; }
+
+    .paste-file-info { display: flex; flex-direction: column; gap: 3px; }
+    .paste-file-name { font-size: 0.9rem; color: #ccc; font-weight: 500; }
+    .paste-file-meta { font-size: 0.78rem; color: #666; }
+
+    .replace-btn {
+      margin-left: auto;
+      background: none;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #666;
+      font-size: 0.78rem;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .replace-btn:hover { border-color: #555; color: #aaa; }
+
+    /* ── Settings ── */
+    #settings {
+      width: 100%;
+      max-width: 960px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+    }
+    #settings.visible { display: flex; }
+
+    .settings-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 0.78rem;
+      color: #888;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type=range] {
+      flex: 1;
+      accent-color: #7c6af7;
+      height: 4px;
+      cursor: pointer;
+    }
+
+    .val-badge {
+      font-size: 0.82rem;
+      color: #ccc;
+      min-width: 44px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .size-input {
+      width: 100%;
+      background: #111;
+      border: 1px solid #2e2e2e;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .size-input:focus { border-color: #7c6af7; }
+
+    .format-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .fmt-btn {
+      flex: 1;
+      background: #111;
+      border: 1px solid #2e2e2e;
+      border-radius: 6px;
+      color: #777;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 0;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .fmt-btn.active { border-color: #7c6af7; color: #a89cf7; background: #1e1b33; }
+    .fmt-btn:hover:not(.active) { border-color: #444; color: #aaa; }
+
+    .auto-btn {
+      width: 100%;
+      background: #1e1b33;
+      border: 1px solid #7c6af7;
+      border-radius: 6px;
+      color: #a89cf7;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 8px 0;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .auto-btn:hover { background: #2a2455; color: #c4baff; }
+    .auto-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Preview ── */
+    #preview {
+      width: 100%;
+      max-width: 960px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #preview.visible { display: flex; }
+
+    .preview-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .preview-panels { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid #222;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title { font-size: 0.78rem; color: #888; font-weight: 500; letter-spacing: 0.04em; }
+
+    .panel-meta { font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+    .panel-meta.ok   { color: #4ade80; }
+    .panel-meta.warn { color: #facc15; }
+    .panel-meta.over { color: #f87171; }
+
+    .panel-img {
+      width: 100%;
+      display: block;
+      object-fit: contain;
+      max-height: 400px;
+      background: #111;
+      image-rendering: pixelated;
+    }
+
+    .panel-dims {
+      padding: 7px 14px;
+      font-size: 0.75rem;
+      color: #555;
+      border-top: 1px solid #1e1e1e;
+    }
+
+    /* ── Download bar ── */
+    #download-bar {
+      width: 100%;
+      max-width: 960px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+    }
+    #download-bar.visible { display: flex; }
+
+    .dl-btn {
+      flex: 1;
+      background: #7c6af7;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 12px 0;
+      cursor: pointer;
+      transition: background 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .dl-btn:hover { background: #6a59e0; }
+    .dl-btn:disabled { background: #333; color: #555; cursor: default; }
+
+    .savings-badge {
+      font-size: 0.8rem;
+      color: #666;
+      white-space: nowrap;
+    }
+    .savings-badge span { color: #4ade80; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <a class="back-link" href="../index.html">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+           viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Tools
+    </a>
+    <h1>Image Compressor</h1>
+  </div>
+
+  <!-- Paste zone -->
+  <div id="paste-zone" tabindex="0">
+    <svg class="paste-icon" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"
+         viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+    <div class="paste-label">Ctrl+V to paste an image</div>
+    <div class="paste-sub">or drag &amp; drop a file here</div>
+  </div>
+
+  <!-- Settings (shown after image load) -->
+  <div id="settings">
+    <div class="settings-row">
+
+      <div class="field">
+        <label>DIMENSION</label>
+        <div class="field-row">
+          <input type="range" id="dim-slider" min="5" max="100" value="100" step="5" />
+          <span class="val-badge" id="dim-val">100%</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>QUALITY</label>
+        <div class="field-row">
+          <input type="range" id="quality-slider" min="1" max="100" value="85" step="1" />
+          <span class="val-badge" id="quality-val">85</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>FORMAT</label>
+        <div class="format-group">
+          <button class="fmt-btn active" data-fmt="image/jpeg">JPEG</button>
+          <button class="fmt-btn" data-fmt="image/webp">WebP</button>
+          <button class="fmt-btn" data-fmt="image/png">PNG</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>TARGET SIZE (KB)</label>
+        <input type="number" class="size-input" id="target-input" placeholder="e.g. 1000 for Discord" min="1" />
+      </div>
+
+      <div class="field" style="justify-content: flex-end;">
+        <button class="auto-btn" id="auto-btn" disabled>Auto-fit Quality to Target</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div id="preview">
+    <div class="preview-panels">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">ORIGINAL</span>
+          <span class="panel-meta" id="orig-size">—</span>
+        </div>
+        <img class="panel-img" id="orig-img" alt="Original" />
+        <div class="panel-dims" id="orig-dims">—</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">COMPRESSED</span>
+          <span class="panel-meta" id="comp-size">—</span>
+        </div>
+        <img class="panel-img" id="comp-img" alt="Compressed" />
+        <div class="panel-dims" id="comp-dims">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download bar -->
+  <div id="download-bar">
+    <button class="dl-btn" id="dl-btn">Download Compressed Image</button>
+    <span class="savings-badge" id="savings-badge"></span>
+  </div>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+  (function () {
+
+    var origBitmap = null;   // ImageBitmap of the original
+    var origBytes  = 0;
+    var origW = 0, origH = 0;
+    var origName = 'image';
+    var currentDataUrl = null;
+    var currentFmt = 'image/jpeg';
+    var debounceTimer = null;
+
+    var pasteZone   = document.getElementById('paste-zone');
+    var settings    = document.getElementById('settings');
+    var preview     = document.getElementById('preview');
+    var downloadBar = document.getElementById('download-bar');
+    var canvas      = document.getElementById('canvas');
+    var ctx         = canvas.getContext('2d');
+
+    var dimSlider     = document.getElementById('dim-slider');
+    var dimVal        = document.getElementById('dim-val');
+    var qualSlider    = document.getElementById('quality-slider');
+    var qualVal       = document.getElementById('quality-val');
+    var targetInput   = document.getElementById('target-input');
+    var autoBtn       = document.getElementById('auto-btn');
+    var origImg       = document.getElementById('orig-img');
+    var compImg       = document.getElementById('comp-img');
+    var origSizeEl    = document.getElementById('orig-size');
+    var compSizeEl    = document.getElementById('comp-size');
+    var origDimsEl    = document.getElementById('orig-dims');
+    var compDimsEl    = document.getElementById('comp-dims');
+    var dlBtn         = document.getElementById('dl-btn');
+    var savingsBadge  = document.getElementById('savings-badge');
+
+    // ── Format buttons ────────────────────────────────────────────────────────
+
+    document.querySelectorAll('.fmt-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.fmt-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentFmt = btn.dataset.fmt;
+        scheduleCompress();
+      });
+    });
+
+    // ── Slider live update ────────────────────────────────────────────────────
+
+    dimSlider.addEventListener('input', function () {
+      dimVal.textContent = this.value + '%';
+      scheduleCompress();
+    });
+
+    qualSlider.addEventListener('input', function () {
+      qualVal.textContent = this.value;
+      scheduleCompress();
+    });
+
+    targetInput.addEventListener('input', function () {
+      autoBtn.disabled = !this.value || +this.value < 1;
+    });
+
+    autoBtn.addEventListener('click', function () {
+      var target = +targetInput.value;
+      if (!target || !origBitmap) return;
+      var q = autoFitQuality(target * 1024);
+      qualSlider.value = Math.round(q * 100);
+      qualVal.textContent = qualSlider.value;
+      compress();
+    });
+
+    // ── Image ingestion ───────────────────────────────────────────────────────
+
+    function loadBlob(blob, name) {
+      origBytes = blob.size;
+      origName  = name || 'image';
+      var url   = URL.createObjectURL(blob);
+
+      createImageBitmap(blob).then(function (bmp) {
+        origBitmap = bmp;
+        origW = bmp.width;
+        origH = bmp.height;
+
+        origImg.src = url;
+        origSizeEl.textContent = fmtBytes(origBytes);
+        origDimsEl.textContent = origW + ' × ' + origH + ' px';
+
+        showPasteLoaded(origName, origBytes, origW, origH);
+        settings.classList.add('visible');
+        preview.classList.add('visible');
+        downloadBar.classList.add('visible');
+
+        compress();
+      });
+    }
+
+    function showPasteLoaded(name, bytes, w, h) {
+      pasteZone.innerHTML =
+        '<div class="paste-file-info">' +
+          '<div class="paste-file-name">' + escHtml(name) + '</div>' +
+          '<div class="paste-file-meta">' + fmtBytes(bytes) + ' &nbsp;·&nbsp; ' + w + ' × ' + h + ' px</div>' +
+        '</div>' +
+        '<button class="replace-btn" id="replace-btn">Replace</button>';
+      pasteZone.classList.add('has-image');
+      document.getElementById('replace-btn').addEventListener('click', resetTool);
+    }
+
+    // ── Compress ──────────────────────────────────────────────────────────────
+
+    function compress() {
+      if (!origBitmap) return;
+
+      var scale   = +dimSlider.value / 100;
+      var quality = +qualSlider.value / 100;
+      var w = Math.max(1, Math.round(origW * scale));
+      var h = Math.max(1, Math.round(origH * scale));
+
+      canvas.width  = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(origBitmap, 0, 0, w, h);
+
+      var fmt = currentFmt;
+      var dataUrl = (fmt === 'image/png')
+        ? canvas.toDataURL('image/png')
+        : canvas.toDataURL(fmt, quality);
+
+      currentDataUrl = dataUrl;
+
+      var compBytes = dataUrlBytes(dataUrl);
+      var ext = fmtExt(fmt);
+
+      compImg.src    = dataUrl;
+      compSizeEl.textContent = fmtBytes(compBytes);
+      compSizeEl.className   = 'panel-meta ' + sizeClass(compBytes);
+      compDimsEl.textContent = w + ' × ' + h + ' px';
+
+      dlBtn.disabled = false;
+      dlBtn.textContent = 'Download  ' + escHtml(baseName(origName)) + ext;
+
+      var saved = origBytes - compBytes;
+      if (saved > 0) {
+        var pct = Math.round(saved / origBytes * 100);
+        savingsBadge.innerHTML = 'Saved <span>' + pct + '%</span> (' + fmtBytes(saved) + ')';
+      } else {
+        savingsBadge.innerHTML = '<span style="color:#f87171">+' + fmtBytes(-saved) + ' larger than original</span>';
+      }
+    }
+
+    function scheduleCompress() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(compress, 80);
+    }
+
+    // ── Auto-fit quality (binary search) ──────────────────────────────────────
+
+    function autoFitQuality(targetBytes) {
+      if (!origBitmap) return 0.85;
+
+      var scale = +dimSlider.value / 100;
+      var w = Math.max(1, Math.round(origW * scale));
+      var h = Math.max(1, Math.round(origH * scale));
+
+      canvas.width  = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(origBitmap, 0, 0, w, h);
+
+      var fmt = currentFmt === 'image/png' ? 'image/jpeg' : currentFmt;
+      var lo = 0.01, hi = 1.0, mid = 0.85;
+
+      for (var i = 0; i < 20; i++) {
+        mid = (lo + hi) / 2;
+        var bytes = dataUrlBytes(canvas.toDataURL(fmt, mid));
+        if (bytes > targetBytes) hi = mid;
+        else lo = mid;
+        if (hi - lo < 0.004) break;
+      }
+
+      if (currentFmt === 'image/png') {
+        currentFmt = 'image/jpeg';
+        document.querySelectorAll('.fmt-btn').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.fmt === 'image/jpeg');
+        });
+      }
+
+      return mid;
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+
+    dlBtn.addEventListener('click', function () {
+      if (!currentDataUrl) return;
+      var a = document.createElement('a');
+      a.href = currentDataUrl;
+      a.download = baseName(origName) + fmtExt(currentFmt);
+      a.click();
+    });
+
+    // ── Reset ─────────────────────────────────────────────────────────────────
+
+    function resetTool() {
+      origBitmap = null;
+      currentDataUrl = null;
+      settings.classList.remove('visible');
+      preview.classList.remove('visible');
+      downloadBar.classList.remove('visible');
+      pasteZone.classList.remove('has-image');
+      pasteZone.innerHTML =
+        '<svg class="paste-icon" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"' +
+        '     viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">' +
+        '  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>' +
+        '  <circle cx="8.5" cy="8.5" r="1.5"/>' +
+        '  <polyline points="21 15 16 10 5 21"/>' +
+        '</svg>' +
+        '<div class="paste-label">Ctrl+V to paste an image</div>' +
+        '<div class="paste-sub">or drag &amp; drop a file here</div>';
+      pasteZone.focus();
+    }
+
+    // ── Paste ──────────────────────────────────────────────────────────────────
+
+    document.addEventListener('paste', function (e) {
+      var items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          e.preventDefault();
+          var blob = items[i].getAsFile();
+          var name = blob.name || ('pasted-image.' + items[i].type.split('/')[1]);
+          loadBlob(blob, name);
+          return;
+        }
+      }
+    });
+
+    // ── Drag & drop ────────────────────────────────────────────────────────────
+
+    pasteZone.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      pasteZone.classList.add('drag-over');
+    });
+    pasteZone.addEventListener('dragleave', function () {
+      pasteZone.classList.remove('drag-over');
+    });
+    pasteZone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      pasteZone.classList.remove('drag-over');
+      var file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) loadBlob(file, file.name);
+    });
+
+    pasteZone.addEventListener('click', function (e) {
+      if (e.target.closest('.replace-btn')) return;
+      pasteZone.focus();
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function dataUrlBytes(dataUrl) {
+      var b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+      var padding = (b64.slice(-2) === '==' ? 2 : b64.slice(-1) === '=' ? 1 : 0);
+      return Math.floor(b64.length * 3 / 4) - padding;
+    }
+
+    function fmtBytes(n) {
+      if (n < 1024)       return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    function sizeClass(bytes) {
+      var kb = bytes / 1024;
+      if (kb <= 900)  return 'ok';
+      if (kb <= 1024) return 'warn';
+      return 'over';
+    }
+
+    function fmtExt(fmt) {
+      return fmt === 'image/png' ? '.png' : fmt === 'image/webp' ? '.webp' : '.jpg';
+    }
+
+    function baseName(name) {
+      return name.replace(/\.[^.]+$/, '');
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+  }());
+  </script>
+
+</body>
+</html>
