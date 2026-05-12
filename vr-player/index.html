@@ -7,15 +7,10 @@
 
   <link href="dist/video-js.css" rel="stylesheet" />
   <link href="dist/videojs-vr.css" rel="stylesheet" />
+  <link rel="stylesheet" href="../theme.css" />
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      background: #0d0d0d;
-      color: #e0e0e0;
-      font-family: system-ui, sans-serif;
-      min-height: 100vh;
       padding: 24px 16px;
       display: flex;
       flex-direction: column;
@@ -23,58 +18,34 @@
       gap: 20px;
     }
 
-    .top-bar {
-      width: 100%;
-      max-width: 960px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .back-link {
-      color: #666;
-      text-decoration: none;
-      font-size: 0.85rem;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      transition: color 0.15s;
-    }
-    .back-link:hover { color: #ccc; }
-
-    h1 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      color: #fff;
-    }
+    .top-bar { max-width: 960px; }
 
     .open-zone {
       width: 100%;
       max-width: 960px;
-      background: #1a1a1a;
-      border: 2px dashed #333;
-      border-radius: 10px;
+      background: var(--color-surface);
+      border: 2px dashed var(--color-border);
+      border-radius: var(--radius-md);
       padding: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      color: #888;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+      color: var(--color-text-secondary);
       font-size: 0.9rem;
     }
     .open-zone:hover, .open-zone.drag-over {
-      border-color: #7c6af7;
-      background: #1e1a2e;
-      color: #ccc;
+      border-color: var(--color-primary);
+      background: var(--color-primary-bg);
+      color: var(--color-primary);
     }
     .open-zone.has-file {
       border-style: solid;
-      border-color: #2a2a2a;
+      border-color: var(--color-border);
       justify-content: flex-start;
-      color: #e0e0e0;
+      color: var(--color-text);
     }
     .open-zone input { display: none; }
 
@@ -82,10 +53,10 @@
       width: 100%;
       max-width: 960px;
       background: #000;
-      border-radius: 10px;
+      border-radius: var(--radius-md);
       overflow: hidden;
+      box-shadow: var(--shadow-md);
     }
-
   </style>
 </head>
 <body>
